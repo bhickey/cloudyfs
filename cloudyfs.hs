@@ -1,5 +1,7 @@
 module Main where
 
+import Data.IORef
+
 import System.CloudyFS.Types
 
 import qualified Data.ByteString.Char8 as B
@@ -10,15 +12,20 @@ import System.Posix.IO
 
 import System.Fuse
 
-type HT = String
+type HT = ()
+
+mkDatabase :: IO Database
+mkDatabase = newIORef ()
 
 main :: IO ()
-main = fuseMain helloFSOps defaultExceptionHandler
+main = do
+  db <- mkDatabase
+  fuseMain (helloFSOps db) defaultExceptionHandler
 
-helloFSOps :: FuseOperations HT
-helloFSOps = defaultFuseOps { fuseGetFileStat = helloGetFileStat
-                            , fuseOpen = helloOpen
-                            , fuseRead = helloRead
+helloFSOps :: Database -> FuseOperations HT
+helloFSOps db = defaultFuseOps { fuseGetFileStat = helloGetFileStat
+                            , fuseOpen = helloOpen db
+                            , fuseRead = helloRead db
                             , fuseOpenDirectory = helloOpenDirectory
                             , fuseReadDirectory = helloReadDirectory
                             , fuseGetFileSystemStats = helloGetFileSystemStats
@@ -83,14 +90,15 @@ helloReadDirectory "/" = do
     where (_:helloName) = helloPath
 helloReadDirectory _ = return (Left (eNOENT))
 
-helloOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno HT)
-helloOpen path mode flags =
+helloOpen :: Database -> FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno HT)
+helloOpen database path mode flags = do
+  db <- readIORef database
   case mode of
-    ReadOnly -> return (Right path)
+    ReadOnly -> return (Right ())
     _ -> return (Left eACCES)
 
-helloRead :: FilePath -> HT -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
-helloRead _ path byteCount offset =
+helloRead :: Database -> FilePath -> HT -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
+helloRead _ path _ byteCount offset =
         return $ Right $ B.take (fromIntegral byteCount) $ B.drop (fromIntegral offset) (B.pack path)
 
 helloGetFileSystemStats :: String -> IO (Either Errno FileSystemStats)
