@@ -1,0 +1,10 @@
+.*
+!.gitignore
+*~
+cloudyfs
+*.hi
+*.o
+.*.sw[a-z]
+*.un~
+Session.vim
+.netrwhist
