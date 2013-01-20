@@ -1,4 +1,4 @@
-module System.CloudyFS.Types
+module System.CloudyFS.Types where
 
 type Weather = ()
 type Station = String

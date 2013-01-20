@@ -1,5 +1,7 @@
 module Main where
 
+import System.CloudyFS.Types
+
 import qualified Data.ByteString.Char8 as B
 import Foreign.C.Error
 import System.Posix.Types
