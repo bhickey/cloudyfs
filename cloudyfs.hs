@@ -21,9 +21,6 @@ helloFSOps = defaultFuseOps { fuseGetFileStat = helloGetFileStat
                             , fuseReadDirectory = helloReadDirectory
                             , fuseGetFileSystemStats = helloGetFileSystemStats
                             }
-helloString :: B.ByteString
-helloString = B.pack "Hello World, HFuse!\n"
-
 helloPath :: FilePath
 helloPath = "/hello"
 dirStat ctx = FileStat { statEntryType = Directory
