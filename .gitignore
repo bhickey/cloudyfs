@@ -8,3 +8,4 @@ cloudyfs
 *.un~
 Session.vim
 .netrwhist
+dist/
