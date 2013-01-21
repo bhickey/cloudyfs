@@ -79,7 +79,14 @@ helloGetFileStat path = do
     return $ Right $ fileStat path ctx
 
 helloOpenDirectory _ "/" = return eOK
-helloOpenDirectory _ _ = return eNOENT
+helloOpenDirectory database path = do
+  db <- readIORef database
+  case makePath path of
+    Left _ -> return eEXIST
+    Right p ->
+      case (insertDir p db) of
+        Just db' -> writeIORef database db' >> return eOK
+        Nothing -> return eNOENT
 
 helloReadDirectory :: Database -> FilePath -> IO (Either Errno [(FilePath, FileStat)])
 helloReadDirectory database "/" = do
