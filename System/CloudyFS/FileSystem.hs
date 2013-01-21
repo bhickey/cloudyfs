@@ -14,6 +14,14 @@ data RegularDirPath = RegularDirPath [DirPart] deriving (Show)
 data FilePart = FilePart String deriving (Eq, Ord, Show)
 data DirPart = DirPart String deriving (Eq, Ord, Show)
 
+existsAsDir :: FilePart -> FileSystem a -> Bool
+existsAsDir (FilePart s) (FileSystem sd c) =
+  (M.member (DirPart (s ++ "/")) sd)
+
+existsAsFile :: DirPart -> FileSystem a -> Bool
+existsAsFile (DirPart s) (FileSystem sd c) =
+  (M.member (FilePart (drop ((length s) - 1) s)) c)
+
 data FileSystem a = FileSystem 
   { 
     subdirs :: Map DirPart (FileSystem a),
@@ -23,7 +31,7 @@ data FileSystem a = FileSystem
 
 makePath :: FilePath -> Either RegularFilePath RegularDirPath
 makePath fp = 
-  let path = splitPath fp
+  let path = splitPath $ normalise fp
       rpath = reverse path in
     if (last . head $ rpath) == '/'
     then Right $ RegularDirPath $ map DirPart path
@@ -37,23 +45,31 @@ insertFile ::
   a -> 
   RegularFilePath ->
   FileSystem a ->
-  FileSystem a
-insertFile datum (RegularFilePath [] fp) (FileSystem sd c) =
-  (FileSystem sd (M.insert fp datum c))
-insertFile datum (RegularFilePath (h:t) fp) (FileSystem sd c) =
-  let subdir = M.findWithDefault emptyFS h sd
-      updatedDir = insertFile datum (RegularFilePath t fp) subdir in
-    (FileSystem (M.insert h updatedDir sd) c)
+  Maybe (FileSystem a)
+insertFile datum (RegularFilePath [] fp) fs@(FileSystem sd c) =
+  if existsAsDir fp fs
+  then Nothing
+  else Just (FileSystem sd (M.insert fp datum c))
+insertFile datum (RegularFilePath (h:t) fp) fs@(FileSystem sd c) =
+  if existsAsFile h fs
+  then Nothing
+  else let subdir = M.findWithDefault emptyFS h sd in
+         case insertFile datum (RegularFilePath t fp) subdir of
+           Just d' -> Just (FileSystem (M.insert h d' sd) c)
+           Nothing -> Nothing
 
 insertDir ::
   RegularDirPath ->
   FileSystem a ->
-  FileSystem a
-insertDir (RegularDirPath []) fs = fs
-insertDir (RegularDirPath (h:t)) (FileSystem sd c) =
-  let subdir = M.findWithDefault emptyFS h sd
-      updatedDir = insertDir (RegularDirPath t) subdir in
-    (FileSystem (M.insert h updatedDir sd) c)
+  Maybe (FileSystem a)
+insertDir (RegularDirPath []) fs = Just fs
+insertDir (RegularDirPath (h:t)) fs@(FileSystem sd c) =
+  if existsAsFile h fs
+  then Nothing
+  else let subdir = M.findWithDefault emptyFS h sd in
+         case insertDir (RegularDirPath t) subdir of
+           Just d' -> Just (FileSystem (M.insert h d' sd) c)
+           Nothing -> Nothing
 
 type Weather = ()
 type Station = String
