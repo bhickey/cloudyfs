@@ -11,6 +11,8 @@ import qualified Data.Map as M
 
 type Database = IORef (FileSystem Int)
 
+type IntFS = FileSystem Int
+
 data RegularFilePath = RegularFilePath [DirPart] FilePart deriving (Show)
 data RegularDirPath = RegularDirPath [DirPart] deriving (Show)
 data FilePart = FilePart String deriving (Eq, Ord, Show)

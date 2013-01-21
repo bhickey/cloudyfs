@@ -15,24 +15,25 @@ import System.Fuse
 
 type HT = ()
 
+logFile = "~/cloudyfs.log"
+
 mkDatabase :: IO Database
 mkDatabase = newIORef (emptyFS)
 
 main :: IO ()
 main = do
   db <- mkDatabase
-  fuseMain (helloFSOps db) defaultExceptionHandler
+  fuseMain (cloudyFSOps db) defaultExceptionHandler
 
-helloFSOps :: Database -> FuseOperations HT
-helloFSOps db = defaultFuseOps { fuseGetFileStat = helloGetFileStat
-                            , fuseOpen = helloOpen db
-                            , fuseRead = helloRead db
-                            , fuseOpenDirectory = helloOpenDirectory db
-                            , fuseReadDirectory = helloReadDirectory db
-                            , fuseGetFileSystemStats = helloGetFileSystemStats db
+cloudyFSOps :: Database -> FuseOperations HT
+cloudyFSOps db = defaultFuseOps { fuseGetFileStat = cloudyGetFileStat
+                            , fuseOpen = cloudyOpen db
+                            , fuseRead = cloudyRead db
+                            , fuseOpenDirectory = cloudyOpenDirectory
+                            , fuseReadDirectory = cloudyReadDirectory db
+                            , fuseGetFileSystemStats = cloudyGetFileSystemStats db
                             }
-helloPath :: FilePath
-helloPath = "/hello"
+
 dirStat ctx = FileStat { statEntryType = Directory
                        , statFileMode = foldr1 unionFileModes
                                           [ ownerReadMode
@@ -70,48 +71,49 @@ fileStat fileName ctx = FileStat { statEntryType = RegularFile
                         , statStatusChangeTime = 0
                         }
 
-helloGetFileStat :: FilePath -> IO (Either Errno FileStat)
-helloGetFileStat "/" = do
+cloudyGetFileStat :: FilePath -> IO (Either Errno FileStat)
+cloudyGetFileStat path = do
+    appendFile logFile ("file stat " ++ path ++ "\n")
     ctx <- getFuseContext
-    return $ Right $ dirStat ctx
-helloGetFileStat path = do
-    ctx <- getFuseContext
-    return $ Right $ fileStat path ctx
+    case makePath (path ++ "/") of
+      Left _ -> return $ Right $ fileStat path ctx
+      Right _ -> return $ Right $ dirStat ctx
 
-helloOpenDirectory _ "/" = return eOK
-helloOpenDirectory database path = do
-  db <- readIORef database
-  case makePath path of
+cloudyOpenDirectory path = do
+  appendFile logFile ("open dir " ++ path ++ "\n")
+  case makePath (path ++ "/") of
     Left _ -> return eEXIST
-    Right p ->
-      case (insertDir p db) of
-        Just db' -> writeIORef database db' >> return eOK
-        Nothing -> return eNOENT
+    Right p -> return eOK
 
-helloReadDirectory :: Database -> FilePath -> IO (Either Errno [(FilePath, FileStat)])
-helloReadDirectory database "/" = do
-    db <- readIORef database 
+cloudyReadDirectory :: Database -> FilePath -> IO (Either Errno [(FilePath, FileStat)])
+cloudyReadDirectory database path = do
+    appendFile logFile ("read dir " ++ path ++ "\n")
     ctx <- getFuseContext
-    return $ Right [(".", dirStat ctx)
-                   ,("..", dirStat ctx)
-                   ,(helloName, fileStat helloName ctx)
-                   ]
-    where (_:helloName) = helloPath
-helloReadDirectory _ _ = return (Left (eNOENT))
+    db <- readIORef database
+    case insertDir (getDirPath (path ++ "/")) db of
+      Nothing -> return (Left eACCES)
+      Just fs -> do
+        writeIORef database fs
+        return $ Right [(".", dirStat ctx)
+                       ,("..", dirStat ctx)
+                       ,("baz/", dirStat ctx)
+                       ]
+      where getDirPath path = case makePath path of Right d -> d
 
-helloOpen :: Database -> FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno HT)
-helloOpen database path mode flags = do
+cloudyOpen :: Database -> FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno HT)
+cloudyOpen database path ReadOnly flags = do
   db <- readIORef database
-  case mode of
-    ReadOnly -> return (Right ())
-    _ -> return (Left eACCES)
+  case insertFile 1 (getFilePath path) db of
+    Nothing -> return (Left eACCES)
+    Just fs -> writeIORef database fs >> return (Right ())
+    where getFilePath path = case makePath path of Left fp -> fp
+cloudyOpen _ _ _ _ = return (Left eACCES)
 
-helloRead :: Database -> FilePath -> HT -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
-helloRead _ path _ byteCount offset =
-        return $ Right $ B.take (fromIntegral byteCount) $ B.drop (fromIntegral offset) (B.pack path)
+cloudyRead :: Database -> FilePath -> HT -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
+cloudyRead _ path _ byteCount offset = return $ Left eEXIST
 
-helloGetFileSystemStats :: Database -> String -> IO (Either Errno FileSystemStats)
-helloGetFileSystemStats _ str =
+cloudyGetFileSystemStats :: Database -> String -> IO (Either Errno FileSystemStats)
+cloudyGetFileSystemStats _ str =
   return $ Right $ FileSystemStats
     { fsStatBlockSize = 512
     , fsStatBlockCount = 1
