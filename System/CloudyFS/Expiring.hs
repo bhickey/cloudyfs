@@ -4,11 +4,8 @@ import Data.DateTime
 
 class Expiring a where
   expiresAt :: a -> DateTime
-  ifValid :: a -> IO (Maybe a)
-  ifValid x = do
-    v <- isValid x
-    return $ if v then Just x else Nothing
-  isValid :: a -> IO Bool
-  isValid x = do
-    t <- getCurrentTime
-    return $ t > expiresAt x
+  ifValid :: DateTime -> a -> Maybe a
+  ifValid t x = do
+    if isValid t x then Just x else Nothing
+  isValid :: DateTime -> a -> Bool
+  isValid t x = t > expiresAt x

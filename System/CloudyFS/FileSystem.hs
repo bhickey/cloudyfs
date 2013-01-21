@@ -1,7 +1,7 @@
 module System.CloudyFS.FileSystem where
 
 import System.CloudyFS.Expiring
-import Data.DateTime (fromSeconds)
+import Data.DateTime (DateTime, fromSeconds)
 
 import System.FilePath.Posix
 
@@ -41,6 +41,14 @@ instance (Expiring a) => Expiring (FileSystem a) where
         case M.elems mp of
           [] -> fromSeconds 0
           e -> foldl1 max (map expiresAt e)
+
+expire :: (Expiring a) => DateTime -> FileSystem a -> Maybe (FileSystem a)
+expire t (FileSystem sd c) =
+  let sd' = M.mapMaybe (expire t) sd
+      c'  = M.mapMaybe (ifValid t) c in
+    if M.null sd' && M.null c'
+    then Nothing
+    else Just $ FileSystem sd' c'
 
 makePath :: FilePath -> Either RegularFilePath RegularDirPath
 makePath fp = 
