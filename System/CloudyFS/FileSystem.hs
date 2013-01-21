@@ -1,11 +1,13 @@
 module System.CloudyFS.FileSystem where
 
+import System.CloudyFS.Expiring
+import Data.DateTime (fromSeconds)
+
 import System.FilePath.Posix
 
+import Data.IORef
 import Data.Map (Map)
 import qualified Data.Map as M
-
-import Data.IORef
 
 type Database = IORef (FileSystem Int)
 
@@ -28,6 +30,17 @@ data FileSystem a = FileSystem
     contents :: Map FilePart a
   }
   deriving (Eq, Show)
+
+instance (Expiring a) => Expiring (FileSystem a) where
+  expiresAt (FileSystem sd c) = 
+    let contentExpiry = getExpiry c
+        subdirExpiry = getExpiry sd in
+      max contentExpiry subdirExpiry
+    where
+      getExpiry mp = 
+        case M.elems mp of
+          [] -> fromSeconds 0
+          e -> foldl1 max (map expiresAt e)
 
 makePath :: FilePath -> Either RegularFilePath RegularDirPath
 makePath fp = 
