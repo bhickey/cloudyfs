@@ -1,8 +1,9 @@
 module Main where
 
 import Data.IORef
+import qualified Data.Set as S
 
-import System.CloudyFS.Types
+import System.CloudyFS.FileSystem
 
 import qualified Data.ByteString.Char8 as B
 import Foreign.C.Error
@@ -15,7 +16,7 @@ import System.Fuse
 type HT = ()
 
 mkDatabase :: IO Database
-mkDatabase = newIORef ()
+mkDatabase = newIORef (emptyFS)
 
 main :: IO ()
 main = do
@@ -26,9 +27,9 @@ helloFSOps :: Database -> FuseOperations HT
 helloFSOps db = defaultFuseOps { fuseGetFileStat = helloGetFileStat
                             , fuseOpen = helloOpen db
                             , fuseRead = helloRead db
-                            , fuseOpenDirectory = helloOpenDirectory
-                            , fuseReadDirectory = helloReadDirectory
-                            , fuseGetFileSystemStats = helloGetFileSystemStats
+                            , fuseOpenDirectory = helloOpenDirectory db
+                            , fuseReadDirectory = helloReadDirectory db
+                            , fuseGetFileSystemStats = helloGetFileSystemStats db
                             }
 helloPath :: FilePath
 helloPath = "/hello"
@@ -77,18 +78,19 @@ helloGetFileStat path = do
     ctx <- getFuseContext
     return $ Right $ fileStat path ctx
 
-helloOpenDirectory "/" = return eOK
-helloOpenDirectory _ = return eNOENT
+helloOpenDirectory _ "/" = return eOK
+helloOpenDirectory _ _ = return eNOENT
 
-helloReadDirectory :: FilePath -> IO (Either Errno [(FilePath, FileStat)])
-helloReadDirectory "/" = do
+helloReadDirectory :: Database -> FilePath -> IO (Either Errno [(FilePath, FileStat)])
+helloReadDirectory database "/" = do
+    db <- readIORef database 
     ctx <- getFuseContext
     return $ Right [(".", dirStat ctx)
                    ,("..", dirStat ctx)
                    ,(helloName, fileStat helloName ctx)
                    ]
     where (_:helloName) = helloPath
-helloReadDirectory _ = return (Left (eNOENT))
+helloReadDirectory _ _ = return (Left (eNOENT))
 
 helloOpen :: Database -> FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno HT)
 helloOpen database path mode flags = do
@@ -101,8 +103,8 @@ helloRead :: Database -> FilePath -> HT -> ByteCount -> FileOffset -> IO (Either
 helloRead _ path _ byteCount offset =
         return $ Right $ B.take (fromIntegral byteCount) $ B.drop (fromIntegral offset) (B.pack path)
 
-helloGetFileSystemStats :: String -> IO (Either Errno FileSystemStats)
-helloGetFileSystemStats str =
+helloGetFileSystemStats :: Database -> String -> IO (Either Errno FileSystemStats)
+helloGetFileSystemStats _ str =
   return $ Right $ FileSystemStats
     { fsStatBlockSize = 512
     , fsStatBlockCount = 1
