@@ -12,23 +12,27 @@ import System.Posix.IO
 import System.Fuse hiding (RegularFile, Directory)
 import qualified System.Fuse as Fuse
 
-import System.CloudyFS.FileSpec
+import System.CloudyFS.Path
+import System.CloudyFS.FileSystem
 
 type HT = ()
 
-mkDatabase :: IO (IORef ())
-mkDatabase = newIORef ()
+type State = IORef (FileSystem Int)
+
+mkFileSystem :: IO State
+mkFileSystem = newIORef emptyFS
 
 main :: IO ()
 main = do
-  fuseMain cloudyFSOps defaultExceptionHandler
+  fs <- mkFileSystem
+  fuseMain (cloudyFSOps fs) defaultExceptionHandler
 
-cloudyFSOps :: FuseOperations HT
-cloudyFSOps = defaultFuseOps { fuseGetFileStat = cloudyGetFileStat
+cloudyFSOps :: State -> FuseOperations HT
+cloudyFSOps fs = defaultFuseOps { fuseGetFileStat = cloudyGetFileStat
                             , fuseOpen = cloudyOpen
                             , fuseRead = cloudyRead
                             , fuseOpenDirectory = cloudyOpenDirectory
-                            , fuseReadDirectory = cloudyReadDirectory
+                            , fuseReadDirectory = cloudyReadDirectory fs
                             , fuseGetFileSystemStats = cloudyGetFileSystemStats
                             }
 
@@ -86,16 +90,16 @@ cloudyGetFileStat path = do
 cloudyOpenDirectory :: FilePath -> IO Errno
 cloudyOpenDirectory path = do
   case mapMaybe (\ x -> x path) fileSpecifications of
-    (_, DirectoryFile):[] -> do
+    (fp, DirectoryFile):[] -> do
       return $ eOK
     _ -> return $ eEXIST
  
-
-cloudyReadDirectory :: FilePath -> IO (Either Errno [(FilePath, FileStat)])
-cloudyReadDirectory path = do
+cloudyReadDirectory :: State -> FilePath -> IO (Either Errno [(FilePath, FileStat)])
+cloudyReadDirectory stateRef path = do
     ctx <- getFuseContext
     case mapMaybe (\ x -> x path) fileSpecifications of
-      (_, DirectoryFile):_ -> do
+      (fp, DirectoryFile):_ -> do
+        state <- readIORef stateRef
         return $ Right [(".", dirStat ctx)
                         ,("..", dirStat ctx)
                         ]

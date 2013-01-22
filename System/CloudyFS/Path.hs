@@ -1,13 +1,13 @@
-module System.CloudyFS.FileSpec where
+module System.CloudyFS.Path where
 
 import Data.Maybe
-
 import System.FilePath.Posix
-
 import Text.Regex.Base (defaultCompOpt, defaultExecOpt)
 import Text.Regex.Base.RegexLike (matchOnce)
 import Text.Regex.TDFA.Common
 import Text.Regex.TDFA.String
+
+type FilePart = String
 
 data File =
     RegularFile FileAction
