@@ -5,15 +5,15 @@ import Data.Maybe
 import System.FilePath.Posix
 
 import Text.Regex.Base (defaultCompOpt, defaultExecOpt)
-import Text.Regex.Base.RegexLike (matchTest)
+import Text.Regex.Base.RegexLike (matchOnce)
 import Text.Regex.TDFA.Common
 import Text.Regex.TDFA.String
 
 data File =
-    RegularFile
+    RegularFile FileAction
   | DirectoryFile
-  deriving (Show)
 
+type FileAction = IO Int
 type FileMatcher = FilePath -> Maybe ([FilePath], File)
 
 makeRegex :: String -> Regex
@@ -23,15 +23,15 @@ makeRegex s = case compile defaultCompOpt defaultExecOpt s of
 
 makeFileMatcher :: File -> String -> FileMatcher
 makeFileMatcher f r fp = 
-  if (matchTest (makeRegex r) fp)
-    then Just (splitPath fp, f)
-    else Nothing
+  case matchOnce (makeRegex r) fp of
+    Just arr -> Just (splitPath fp, f)
+    _ -> Nothing
 
 weatherStation :: FileMatcher
-weatherStation = makeFileMatcher RegularFile "^/us/[A-Z]{4}$"
+weatherStation = makeFileMatcher (RegularFile (return 2)) "^/us/[A-Z]{4}$"
 
 zipCode :: FileMatcher
-zipCode = makeFileMatcher RegularFile "^/us/[0-9]{5}$"
+zipCode = makeFileMatcher (RegularFile (return 2)) "^/us/[0-9]{5}$"
 
 countryUS :: FileMatcher
 countryUS = makeFileMatcher DirectoryFile "^/us/?$"
@@ -39,6 +39,7 @@ countryUS = makeFileMatcher DirectoryFile "^/us/?$"
 fsRoot :: FileMatcher
 fsRoot = makeFileMatcher DirectoryFile "^/$"
 
+fileSpecifications :: [FileMatcher]
 fileSpecifications = [fsRoot, zipCode, countryUS, weatherStation]
 
 matchSpec :: FilePath -> [([FilePath], File)]

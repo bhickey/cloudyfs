@@ -2,7 +2,6 @@ module Main where
 
 import Data.Maybe
 import Data.IORef
-import qualified Data.Set as S
 
 import qualified Data.ByteString.Char8 as B
 import Foreign.C.Error
@@ -33,6 +32,7 @@ cloudyFSOps = defaultFuseOps { fuseGetFileStat = cloudyGetFileStat
                             , fuseGetFileSystemStats = cloudyGetFileSystemStats
                             }
 
+dirStat :: FuseContext -> FileStat
 dirStat ctx = FileStat { statEntryType = Fuse.Directory
                        , statFileMode = foldr1 unionFileModes
                                           [ ownerReadMode
@@ -53,6 +53,7 @@ dirStat ctx = FileStat { statEntryType = Fuse.Directory
                        , statStatusChangeTime = 0
                        }
 
+fileStat :: String -> FuseContext -> FileStat
 fileStat fileName ctx = FileStat { statEntryType = Fuse.RegularFile
                         , statFileMode = foldr1 unionFileModes
                                            [ ownerReadMode
@@ -75,7 +76,7 @@ cloudyGetFileStat path = do
   ctx <- getFuseContext
   case mapMaybe (\ x -> x path) fileSpecifications of
     [] -> return $ Left $ eBUSY
-    (_, RegularFile):[] -> do
+    (_, RegularFile _):[] -> do
       return $ Right $ fileStat path ctx
     (_, DirectoryFile):[] -> do
       return $ Right $ dirStat ctx
@@ -94,24 +95,25 @@ cloudyReadDirectory :: FilePath -> IO (Either Errno [(FilePath, FileStat)])
 cloudyReadDirectory path = do
     ctx <- getFuseContext
     case mapMaybe (\ x -> x path) fileSpecifications of
-      (p, DirectoryFile):_ -> do
+      (_, DirectoryFile):_ -> do
         return $ Right [(".", dirStat ctx)
                         ,("..", dirStat ctx)
                         ]
       _ -> return $ Left eEXIST
 
 cloudyOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno HT)
-cloudyOpen path ReadOnly flags =
+cloudyOpen path ReadOnly _ =
    case mapMaybe (\ x -> x path) fileSpecifications of
      [] -> return (Left eACCES)
      _ -> return (Right ())
+cloudyOpen _ _ _ = return $ Left eACCES
 
 cloudyRead :: FilePath -> HT -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
-cloudyRead path _ byteCount offset =
-  return $ Right (B.pack $ path ++ "\n")
+cloudyRead path _ _ _ =
+  return $ Right (B.pack $ path)
 
 cloudyGetFileSystemStats :: String -> IO (Either Errno FileSystemStats)
-cloudyGetFileSystemStats str =
+cloudyGetFileSystemStats _ =
   return $ Right $ FileSystemStats
     { fsStatBlockSize = 512
     , fsStatBlockCount = 1
