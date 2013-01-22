@@ -1,9 +1,8 @@
 module Main where
 
+import Data.Maybe
 import Data.IORef
 import qualified Data.Set as S
-
-import System.CloudyFS.FileSystem
 
 import qualified Data.ByteString.Char8 as B
 import Foreign.C.Error
@@ -11,30 +10,30 @@ import System.Posix.Types
 import System.Posix.Files
 import System.Posix.IO
 
-import System.Fuse
+import System.Fuse hiding (RegularFile, Directory)
+import qualified System.Fuse as Fuse
+
+import System.CloudyFS.FileSpec
 
 type HT = ()
 
-logFile = "~/cloudyfs.log"
-
-mkDatabase :: IO Database
-mkDatabase = newIORef (emptyFS)
+mkDatabase :: IO (IORef ())
+mkDatabase = newIORef ()
 
 main :: IO ()
 main = do
-  db <- mkDatabase
-  fuseMain (cloudyFSOps db) defaultExceptionHandler
+  fuseMain cloudyFSOps defaultExceptionHandler
 
-cloudyFSOps :: Database -> FuseOperations HT
-cloudyFSOps db = defaultFuseOps { fuseGetFileStat = cloudyGetFileStat
-                            , fuseOpen = cloudyOpen db
-                            , fuseRead = cloudyRead db
+cloudyFSOps :: FuseOperations HT
+cloudyFSOps = defaultFuseOps { fuseGetFileStat = cloudyGetFileStat
+                            , fuseOpen = cloudyOpen
+                            , fuseRead = cloudyRead
                             , fuseOpenDirectory = cloudyOpenDirectory
-                            , fuseReadDirectory = cloudyReadDirectory db
-                            , fuseGetFileSystemStats = cloudyGetFileSystemStats db
+                            , fuseReadDirectory = cloudyReadDirectory
+                            , fuseGetFileSystemStats = cloudyGetFileSystemStats
                             }
 
-dirStat ctx = FileStat { statEntryType = Directory
+dirStat ctx = FileStat { statEntryType = Fuse.Directory
                        , statFileMode = foldr1 unionFileModes
                                           [ ownerReadMode
                                           , ownerExecuteMode
@@ -54,7 +53,7 @@ dirStat ctx = FileStat { statEntryType = Directory
                        , statStatusChangeTime = 0
                        }
 
-fileStat fileName ctx = FileStat { statEntryType = RegularFile
+fileStat fileName ctx = FileStat { statEntryType = Fuse.RegularFile
                         , statFileMode = foldr1 unionFileModes
                                            [ ownerReadMode
                                            , groupReadMode
@@ -73,47 +72,46 @@ fileStat fileName ctx = FileStat { statEntryType = RegularFile
 
 cloudyGetFileStat :: FilePath -> IO (Either Errno FileStat)
 cloudyGetFileStat path = do
-    appendFile logFile ("file stat " ++ path ++ "\n")
-    ctx <- getFuseContext
-    case makePath (path ++ "/") of
-      Left _ -> return $ Right $ fileStat path ctx
-      Right _ -> return $ Right $ dirStat ctx
+  ctx <- getFuseContext
+  case mapMaybe (\ x -> x path) fileSpecifications of
+    [] -> return $ Left $ eBUSY
+    (_, RegularFile):[] -> do
+      return $ Right $ fileStat path ctx
+    (_, DirectoryFile):[] -> do
+      return $ Right $ dirStat ctx
+    _ -> return $ Left $ eEXIST
+  
 
+cloudyOpenDirectory :: FilePath -> IO Errno
 cloudyOpenDirectory path = do
-  appendFile logFile ("open dir " ++ path ++ "\n")
-  case makePath (path ++ "/") of
-    Left _ -> return eEXIST
-    Right p -> return eOK
+  case mapMaybe (\ x -> x path) fileSpecifications of
+    (_, DirectoryFile):[] -> do
+      return $ eOK
+    _ -> return $ eEXIST
+ 
 
-cloudyReadDirectory :: Database -> FilePath -> IO (Either Errno [(FilePath, FileStat)])
-cloudyReadDirectory database path = do
-    appendFile logFile ("read dir " ++ path ++ "\n")
+cloudyReadDirectory :: FilePath -> IO (Either Errno [(FilePath, FileStat)])
+cloudyReadDirectory path = do
     ctx <- getFuseContext
-    db <- readIORef database
-    case insertDir (getDirPath (path ++ "/")) db of
-      Nothing -> return (Left eACCES)
-      Just fs -> do
-        writeIORef database fs
+    case mapMaybe (\ x -> x path) fileSpecifications of
+      (p, DirectoryFile):_ -> do
         return $ Right [(".", dirStat ctx)
-                       ,("..", dirStat ctx)
-                       ,("baz/", dirStat ctx)
-                       ]
-      where getDirPath path = case makePath path of Right d -> d
+                        ,("..", dirStat ctx)
+                        ]
+      _ -> return $ Left eEXIST
 
-cloudyOpen :: Database -> FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno HT)
-cloudyOpen database path ReadOnly flags = do
-  db <- readIORef database
-  case insertFile 1 (getFilePath path) db of
-    Nothing -> return (Left eACCES)
-    Just fs -> writeIORef database fs >> return (Right ())
-    where getFilePath path = case makePath path of Left fp -> fp
-cloudyOpen _ _ _ _ = return (Left eACCES)
+cloudyOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno HT)
+cloudyOpen path ReadOnly flags =
+   case mapMaybe (\ x -> x path) fileSpecifications of
+     [] -> return (Left eACCES)
+     _ -> return (Right ())
 
-cloudyRead :: Database -> FilePath -> HT -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
-cloudyRead _ path _ byteCount offset = return $ Left eEXIST
+cloudyRead :: FilePath -> HT -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
+cloudyRead path _ byteCount offset =
+  return $ Right (B.pack $ path ++ "\n")
 
-cloudyGetFileSystemStats :: Database -> String -> IO (Either Errno FileSystemStats)
-cloudyGetFileSystemStats _ str =
+cloudyGetFileSystemStats :: String -> IO (Either Errno FileSystemStats)
+cloudyGetFileSystemStats str =
   return $ Right $ FileSystemStats
     { fsStatBlockSize = 512
     , fsStatBlockCount = 1
