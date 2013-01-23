@@ -3,6 +3,8 @@ module Main where
 import Data.Maybe
 import Data.IORef
 
+import qualified Data.Map as M
+
 import qualified Data.ByteString.Char8 as B
 import Foreign.C.Error
 import System.Posix.Types
@@ -31,7 +33,7 @@ cloudyFSOps :: State -> FuseOperations HT
 cloudyFSOps fs = defaultFuseOps { fuseGetFileStat = cloudyGetFileStat
                             , fuseOpen = cloudyOpen
                             , fuseRead = cloudyRead
-                            , fuseOpenDirectory = cloudyOpenDirectory
+                            , fuseOpenDirectory = cloudyOpenDirectory fs
                             , fuseReadDirectory = cloudyReadDirectory fs
                             , fuseGetFileSystemStats = cloudyGetFileSystemStats
                             }
@@ -87,11 +89,16 @@ cloudyGetFileStat path = do
     _ -> return $ Left $ eEXIST
   
 
-cloudyOpenDirectory :: FilePath -> IO Errno
-cloudyOpenDirectory path = do
+cloudyOpenDirectory :: State -> FilePath -> IO Errno
+cloudyOpenDirectory stateRef path = do
   case mapMaybe (\ x -> x path) fileSpecifications of
     (fp, DirectoryFile):[] -> do
-      return $ eOK
+      st <- readIORef stateRef
+      case mkdir st fp of
+        Just f -> do
+          writeIORef stateRef f
+          return $ eOK
+        Nothing -> return $ eOK
     _ -> return $ eEXIST
  
 cloudyReadDirectory :: State -> FilePath -> IO (Either Errno [(FilePath, FileStat)])
@@ -100,10 +107,12 @@ cloudyReadDirectory stateRef path = do
     case mapMaybe (\ x -> x path) fileSpecifications of
       (fp, DirectoryFile):_ -> do
         state <- readIORef stateRef
-        return $ Right [(".", dirStat ctx)
+        return $ Right $ [(".", dirStat ctx)
                         ,("..", dirStat ctx)
-                        ]
+                        ] ++ (getDirs (lsdir state fp) ctx)
       _ -> return $ Left eEXIST
+    where getDirs Nothing _ = []
+          getDirs (Just m) ctx = map (\ x -> (x, dirStat ctx)) (M.keys m )
 
 cloudyOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno HT)
 cloudyOpen path ReadOnly _ =

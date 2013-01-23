@@ -26,15 +26,19 @@ mkdir (SystemDirectory contents) (h:t) =
       Nothing -> Nothing
       Just subdir -> Just $ SystemDirectory (M.insert h subdir contents)
 
-lsdir :: (FileSystem a) -> [FilePart] -> Maybe [(Either FileName DirName)]
+lsdir :: FileSystem a -> [FilePart] -> Maybe (M.Map FilePart (FileSystem a))
 lsdir (SystemFile _) _ = Nothing
-lsdir _ _ = undefined
+lsdir (SystemDirectory contents) (h:t) =
+  case M.lookup h contents of
+    Nothing -> Nothing
+    Just dir -> lsdir dir t
+lsdir (SystemDirectory contents) [] = Just contents
 
 mkfile :: (FileSystem a) -> [FilePart] -> FilePart -> a -> Maybe (FileSystem a)
 mkfile (SystemFile _) _ _ _ = Nothing
 mkfile (SystemDirectory contents) [] nm dat =
   case M.lookup nm contents of
-    Just (SystemDirectory _) -> Nothing -- trying to write a file into a directory
+    Just (SystemDirectory _) -> Nothing
     _ -> Just $ SystemDirectory (M.insert nm (newFile dat) contents)
 mkfile (SystemDirectory contents) (h:t) nm dat =
   let subdir = M.findWithDefault emptyFS h contents in
