@@ -34,6 +34,14 @@ lsdir (SystemDirectory contents) (h:t) =
     Just dir -> lsdir dir t
 lsdir (SystemDirectory contents) [] = Just contents
 
+getFile :: FileSystem a -> [FilePart] -> Maybe (FileSystem a)
+getFile f [] = Just f
+getFile (SystemFile _) _ = Nothing
+getFile (SystemDirectory contents) (h:t) =
+  case M.lookup h contents of
+    Nothing -> Nothing
+    Just d -> getFile d t
+
 mkfile :: FileSystem a -> [FilePart] -> a -> Maybe (FileSystem a)
 mkfile (SystemFile _) _ _ = Nothing
 mkfile (SystemDirectory _) [] _ = Nothing
