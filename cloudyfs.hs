@@ -31,7 +31,7 @@ main = do
 
 cloudyFSOps :: State -> FuseOperations HT
 cloudyFSOps fs = defaultFuseOps { fuseGetFileStat = cloudyGetFileStat
-                            , fuseOpen = cloudyOpen
+                            , fuseOpen = cloudyOpen fs
                             , fuseRead = cloudyRead
                             , fuseOpenDirectory = cloudyOpenDirectory fs
                             , fuseReadDirectory = cloudyReadDirectory fs
@@ -39,43 +39,45 @@ cloudyFSOps fs = defaultFuseOps { fuseGetFileStat = cloudyGetFileStat
                             }
 
 dirStat :: FuseContext -> FileStat
-dirStat ctx = FileStat { statEntryType = Fuse.Directory
-                       , statFileMode = foldr1 unionFileModes
-                                          [ ownerReadMode
-                                          , ownerExecuteMode
-                                          , groupReadMode
-                                          , groupExecuteMode
-                                          , otherReadMode
-                                          , otherExecuteMode
-                                          ]
-                       , statLinkCount = 2
-                       , statFileOwner = fuseCtxUserID ctx
-                       , statFileGroup = fuseCtxGroupID ctx
-                       , statSpecialDeviceID = 0
-                       , statFileSize = 4096
-                       , statBlocks = 1
-                       , statAccessTime = 0
-                       , statModificationTime = 0
-                       , statStatusChangeTime = 0
-                       }
+dirStat ctx = FileStat
+  { statEntryType = Fuse.Directory
+  , statFileMode = foldr1 unionFileModes
+                     [ ownerReadMode
+                     , ownerExecuteMode
+                     , groupReadMode
+                     , groupExecuteMode
+                     , otherReadMode
+                     , otherExecuteMode
+                     ]
+  , statLinkCount = 2
+  , statFileOwner = fuseCtxUserID ctx
+  , statFileGroup = fuseCtxGroupID ctx
+  , statSpecialDeviceID = 0
+  , statFileSize = 4096
+  , statBlocks = 1
+  , statAccessTime = 0
+  , statModificationTime = 0
+  , statStatusChangeTime = 0
+  }
 
 fileStat :: String -> FuseContext -> FileStat
-fileStat fileName ctx = FileStat { statEntryType = Fuse.RegularFile
-                        , statFileMode = foldr1 unionFileModes
-                                           [ ownerReadMode
-                                           , groupReadMode
-                                           , otherReadMode
-                                           ]
-                        , statLinkCount = 1
-                        , statFileOwner = fuseCtxUserID ctx
-                        , statFileGroup = fuseCtxGroupID ctx
-                        , statSpecialDeviceID = 0
-                        , statFileSize = fromIntegral $ length fileName
-                        , statBlocks = 1
-                        , statAccessTime = 0
-                        , statModificationTime = 0
-                        , statStatusChangeTime = 0
-                        }
+fileStat fileName ctx = FileStat 
+  { statEntryType = Fuse.RegularFile
+  , statFileMode = foldr1 unionFileModes
+                     [ ownerReadMode
+                     , groupReadMode
+                     , otherReadMode
+                     ]
+  , statLinkCount = 1
+  , statFileOwner = fuseCtxUserID ctx
+  , statFileGroup = fuseCtxGroupID ctx
+  , statSpecialDeviceID = 0
+  , statFileSize = fromIntegral $ length fileName
+  , statBlocks = 1
+  , statAccessTime = 0
+  , statModificationTime = 0
+  , statStatusChangeTime = 0
+  }
 
 cloudyGetFileStat :: FilePath -> IO (Either Errno FileStat)
 cloudyGetFileStat path = do
@@ -88,6 +90,17 @@ cloudyGetFileStat path = do
       return $ Right $ dirStat ctx
     _ -> return $ Left $ eEXIST
   
+getDirContents ::
+  FileSystem a ->
+  [FilePart] ->
+  FuseContext ->
+  [(FilePath, FileStat)]
+getDirContents fs path ctx =
+  case lsdir fs path of
+    Nothing -> []
+    Just m -> M.foldWithKey accumulator [] m
+  where accumulator k (SystemFile _) l = (k, fileStat k ctx):l 
+        accumulator k (SystemDirectory _) l = (k, dirStat ctx):l 
 
 cloudyOpenDirectory :: State -> FilePath -> IO Errno
 cloudyOpenDirectory stateRef path = do
@@ -109,17 +122,24 @@ cloudyReadDirectory stateRef path = do
         state <- readIORef stateRef
         return $ Right $ [(".", dirStat ctx)
                         ,("..", dirStat ctx)
-                        ] ++ (getDirs (lsdir state fp) ctx)
+                        ] ++ (getDirContents state fp ctx)
       _ -> return $ Left eEXIST
-    where getDirs Nothing _ = []
-          getDirs (Just m) ctx = map (\ x -> (x, dirStat ctx)) (M.keys m )
 
-cloudyOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno HT)
-cloudyOpen path ReadOnly _ =
+cloudyOpen :: State -> FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno HT)
+cloudyOpen stateRef path ReadOnly _ =
    case mapMaybe (\ x -> x path) fileSpecifications of
-     [] -> return (Left eACCES)
-     _ -> return (Right ())
-cloudyOpen _ _ _ = return $ Left eACCES
+     (fp, RegularFile _):[]  -> do
+       state <- readIORef stateRef
+       case mkfile state fp 1 of
+         Nothing -> do
+           appendFile "/home/brendan/cloudy.log" ("Failed to write file " ++ path ++ "\n")
+           return (Left eACCES)
+         Just f -> do
+           appendFile "/home/brendan/cloudy.log" ("Wrote file " ++ path ++ "\n")
+           writeIORef stateRef f
+           return $ Right ()
+     _ -> return (Left eACCES)
+cloudyOpen _ _ _ _ = return $ Left eACCES
 
 cloudyRead :: FilePath -> HT -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
 cloudyRead path _ _ _ =

@@ -21,10 +21,17 @@ makeRegex s = case compile defaultCompOpt defaultExecOpt s of
   Right r -> r
   _ -> error "Regex compilation failure."
 
+normalisePath :: FilePath -> [FilePart]
+normalisePath fp = map removeTrailingSlash (splitPath fp)
+  where removeTrailingSlash s =
+          if last s == '/'
+            then reverse $ tail $ reverse s
+            else s
+
 makeFileMatcher :: File -> String -> FileMatcher
 makeFileMatcher f r fp = 
   case matchOnce (makeRegex r) fp of
-    Just arr -> Just (splitPath fp, f)
+    Just arr -> Just (normalisePath fp, f)
     _ -> Nothing
 
 weatherStation :: FileMatcher

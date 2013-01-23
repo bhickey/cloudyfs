@@ -17,7 +17,7 @@ emptyFS = SystemDirectory M.empty
 newFile :: a -> FileSystem a
 newFile dat = SystemFile dat
 
-mkdir :: (FileSystem a) -> [FilePart] -> Maybe (FileSystem a)
+mkdir :: FileSystem a -> [FilePart] -> Maybe (FileSystem a)
 mkdir f [] = Just f
 mkdir (SystemFile _) _ = Nothing
 mkdir (SystemDirectory contents) (h:t) =
@@ -34,15 +34,16 @@ lsdir (SystemDirectory contents) (h:t) =
     Just dir -> lsdir dir t
 lsdir (SystemDirectory contents) [] = Just contents
 
-mkfile :: (FileSystem a) -> [FilePart] -> FilePart -> a -> Maybe (FileSystem a)
-mkfile (SystemFile _) _ _ _ = Nothing
-mkfile (SystemDirectory contents) [] nm dat =
+mkfile :: FileSystem a -> [FilePart] -> a -> Maybe (FileSystem a)
+mkfile (SystemFile _) _ _ = Nothing
+mkfile (SystemDirectory _) [] _ = Nothing
+mkfile (SystemDirectory contents) [nm] dat =
   case M.lookup nm contents of
     Just (SystemDirectory _) -> Nothing
     _ -> Just $ SystemDirectory (M.insert nm (newFile dat) contents)
-mkfile (SystemDirectory contents) (h:t) nm dat =
+mkfile (SystemDirectory contents) (h:t) dat =
   let subdir = M.findWithDefault emptyFS h contents in
-    case mkfile subdir t nm dat of
+    case mkfile subdir t dat of
       Nothing -> Nothing
       Just fs -> Just $ SystemDirectory (M.insert h fs contents)
     
