@@ -30,7 +30,7 @@ main = do
   fuseMain (cloudyFSOps fs) defaultExceptionHandler
 
 cloudyFSOps :: State -> FuseOperations HT
-cloudyFSOps fs = defaultFuseOps { fuseGetFileStat = cloudyGetFileStat
+cloudyFSOps fs = defaultFuseOps { fuseGetFileStat = cloudyGetFileStat fs
                             , fuseOpen = cloudyOpen fs
                             , fuseRead = cloudyRead
                             , fuseOpenDirectory = cloudyOpenDirectory fs
@@ -60,8 +60,8 @@ dirStat ctx = FileStat
   , statStatusChangeTime = 0
   }
 
-fileStat :: String -> FuseContext -> FileStat
-fileStat fileName ctx = FileStat 
+fileStat :: FuseContext -> FileStat
+fileStat ctx = FileStat 
   { statEntryType = Fuse.RegularFile
   , statFileMode = foldr1 unionFileModes
                      [ ownerReadMode
@@ -72,24 +72,39 @@ fileStat fileName ctx = FileStat
   , statFileOwner = fuseCtxUserID ctx
   , statFileGroup = fuseCtxGroupID ctx
   , statSpecialDeviceID = 0
-  , statFileSize = fromIntegral $ length fileName
+  , statFileSize = 1
   , statBlocks = 1
   , statAccessTime = 0
   , statModificationTime = 0
   , statStatusChangeTime = 0
   }
 
-cloudyGetFileStat :: FilePath -> IO (Either Errno FileStat)
-cloudyGetFileStat path = do
+cloudyGetFileStat :: State -> FilePath -> IO (Either Errno FileStat)
+cloudyGetFileStat stateRef p = do
   ctx <- getFuseContext
-  case mapMaybe (\ x -> x path) fileSpecifications of
-    [] -> return $ Left $ eBUSY
-    (_, RegularFile _):[] -> do
-      return $ Right $ fileStat path ctx
-    (_, DirectoryFile):[] -> do
-      return $ Right $ dirStat ctx
-    _ -> return $ Left $ eEXIST
-  
+  state <- readIORef stateRef
+  case getFile state path of
+    Just (SystemFile _) -> return $ Right $ fileStat ctx
+    Just (SystemDirectory _) -> return $ Right $ dirStat ctx
+    Nothing ->
+      case mapMaybe (\ x -> x p) fileSpecifications of
+        (_, RegularFile action):[] -> do
+          result <- action
+          case mkfile state path result of
+            Just f -> do
+              writeIORef stateRef f
+              cloudyGetFileStat stateRef p
+            Nothing -> return err
+        (_, DirectoryFile):[] -> do
+          case mkdir state path of
+            Just f -> do
+              writeIORef stateRef f
+              cloudyGetFileStat stateRef p
+            Nothing -> return err
+        _ -> return err
+   where path = normalisePath p
+         err = Left eEXIST
+
 getDirContents ::
   FileSystem a ->
   [FilePart] ->
@@ -99,7 +114,7 @@ getDirContents fs path ctx =
   case lsdir fs path of
     Nothing -> []
     Just m -> M.foldWithKey accumulator [] m
-  where accumulator k (SystemFile _) l = (k, fileStat k ctx):l 
+  where accumulator k (SystemFile _) l = (k, fileStat ctx):l 
         accumulator k (SystemDirectory _) l = (k, dirStat ctx):l 
 
 cloudyOpenDirectory :: State -> FilePath -> IO Errno

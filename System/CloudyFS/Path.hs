@@ -31,7 +31,7 @@ normalisePath fp = map removeTrailingSlash (splitPath fp)
 makeFileMatcher :: File -> String -> FileMatcher
 makeFileMatcher f r fp = 
   case matchOnce (makeRegex r) fp of
-    Just arr -> Just (normalisePath fp, f)
+    Just _ -> Just (normalisePath fp, f)
     _ -> Nothing
 
 weatherStation :: FileMatcher
