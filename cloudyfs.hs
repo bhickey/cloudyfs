@@ -17,9 +17,11 @@ import qualified System.Fuse as Fuse
 import System.CloudyFS.Path
 import System.CloudyFS.FileSystem
 
-type HT = ()
+type HT = FileType
 
-type State = IORef (FileSystem Int)
+type FileType = B.ByteString
+
+type State = IORef (FileSystem FileType)
 
 mkFileSystem :: IO State
 mkFileSystem = newIORef emptyFS
@@ -60,8 +62,8 @@ dirStat ctx = FileStat
   , statStatusChangeTime = 0
   }
 
-fileStat :: FuseContext -> FileStat
-fileStat ctx = FileStat 
+fileStat :: Int -> FuseContext -> FileStat
+fileStat sz ctx = FileStat 
   { statEntryType = Fuse.RegularFile
   , statFileMode = foldr1 unionFileModes
                      [ ownerReadMode
@@ -72,20 +74,23 @@ fileStat ctx = FileStat
   , statFileOwner = fuseCtxUserID ctx
   , statFileGroup = fuseCtxGroupID ctx
   , statSpecialDeviceID = 0
-  , statFileSize = 1
+  , statFileSize = fromIntegral (sz + 1)
   , statBlocks = 1
   , statAccessTime = 0
   , statModificationTime = 0
   , statStatusChangeTime = 0
   }
 
+stat :: FuseContext -> FileSystem B.ByteString -> FileStat
+stat c (SystemDirectory _) = dirStat c
+stat c (SystemFile b) = fileStat (B.length b) c
+
 cloudyGetFileStat :: State -> FilePath -> IO (Either Errno FileStat)
 cloudyGetFileStat stateRef p = do
   ctx <- getFuseContext
   state <- readIORef stateRef
   case getFile state path of
-    Just (SystemFile _) -> return $ Right $ fileStat ctx
-    Just (SystemDirectory _) -> return $ Right $ dirStat ctx
+    Just fs -> return $ Right $ stat ctx fs
     Nothing ->
       case mapMaybe (\ x -> x p) fileSpecifications of
         (_, RegularFile action):[] -> do
@@ -106,7 +111,7 @@ cloudyGetFileStat stateRef p = do
          err = Left eEXIST
 
 getDirContents ::
-  FileSystem a ->
+  FileSystem FileType ->
   [FilePart] ->
   FuseContext ->
   [(FilePath, FileStat)]
@@ -114,8 +119,7 @@ getDirContents fs path ctx =
   case lsdir fs path of
     Nothing -> []
     Just m -> M.foldWithKey accumulator [] m
-  where accumulator k (SystemFile _) l = (k, fileStat ctx):l 
-        accumulator k (SystemDirectory _) l = (k, dirStat ctx):l 
+  where accumulator k fs l = (k, stat ctx fs):l 
 
 cloudyOpenDirectory :: State -> FilePath -> IO Errno
 cloudyOpenDirectory stateRef path = do
@@ -141,24 +145,25 @@ cloudyReadDirectory stateRef path = do
       _ -> return $ Left eEXIST
 
 cloudyOpen :: State -> FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno HT)
-cloudyOpen stateRef path ReadOnly _ =
-   case mapMaybe (\ x -> x path) fileSpecifications of
-     (fp, RegularFile _):[]  -> do
-       state <- readIORef stateRef
-       case mkfile state fp 1 of
-         Nothing -> do
-           appendFile "/home/brendan/cloudy.log" ("Failed to write file " ++ path ++ "\n")
-           return (Left eACCES)
-         Just f -> do
-           appendFile "/home/brendan/cloudy.log" ("Wrote file " ++ path ++ "\n")
-           writeIORef stateRef f
-           return $ Right ()
-     _ -> return (Left eACCES)
+cloudyOpen stateRef path ReadOnly flags = do
+   state <- readIORef stateRef
+   case getFile state (normalisePath path) of
+     Nothing ->
+       case mapMaybe (\ x -> x path) fileSpecifications of
+         (fp, RegularFile _):[]  -> do
+           case mkfile state fp (B.pack path) of
+             Nothing -> return $ Left eACCES
+             Just f -> do
+               writeIORef stateRef f
+               cloudyOpen stateRef path ReadOnly flags
+         _ -> return $ Left eEXIST
+     Just (SystemFile a) -> return $ Right a
+     _ -> return $ Left eEXIST
 cloudyOpen _ _ _ _ = return $ Left eACCES
 
 cloudyRead :: FilePath -> HT -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
-cloudyRead path _ _ _ =
-  return $ Right (B.pack $ path)
+cloudyRead path ht byteCount offset =
+  return $ Right $ B.take (fromIntegral byteCount) $ B.drop (fromIntegral offset) ht
 
 cloudyGetFileSystemStats :: String -> IO (Either Errno FileSystemStats)
 cloudyGetFileSystemStats _ =

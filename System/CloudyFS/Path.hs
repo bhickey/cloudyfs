@@ -1,6 +1,8 @@
 module System.CloudyFS.Path where
 
 import Data.Maybe
+import Data.ByteString.Char8 (ByteString)
+import qualified Data.ByteString.Char8 as B
 import System.FilePath.Posix
 import Text.Regex.Base (defaultCompOpt, defaultExecOpt)
 import Text.Regex.Base.RegexLike (matchOnce)
@@ -13,7 +15,7 @@ data File =
     RegularFile FileAction
   | DirectoryFile
 
-type FileAction = IO Int
+type FileAction = IO ByteString
 type FileMatcher = FilePath -> Maybe ([FilePath], File)
 
 makeRegex :: String -> Regex
@@ -35,10 +37,10 @@ makeFileMatcher f r fp =
     _ -> Nothing
 
 weatherStation :: FileMatcher
-weatherStation = makeFileMatcher (RegularFile (return 2)) "^/us/[A-Z]{4}$"
+weatherStation = makeFileMatcher (RegularFile (return $ B.pack "foo")) "^/us/[A-Z]{4}$"
 
 zipCode :: FileMatcher
-zipCode = makeFileMatcher (RegularFile (return 2)) "^/us/[0-9]{5}$"
+zipCode = makeFileMatcher (RegularFile (return $ B.pack "foo")) "^/us/[0-9]{5}$"
 
 countryUS :: FileMatcher
 countryUS = makeFileMatcher DirectoryFile "^/us/?$"
