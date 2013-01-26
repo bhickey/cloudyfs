@@ -15,7 +15,7 @@ data File =
     RegularFile FileAction
   | DirectoryFile
 
-type FileAction = IO ByteString
+type FileAction = [FilePart] -> IO ByteString
 type FileMatcher = FilePath -> Maybe ([FilePath], File)
 
 makeRegex :: String -> Regex
@@ -36,11 +36,12 @@ makeFileMatcher f r fp =
     Just _ -> Just (normalisePath fp, f)
     _ -> Nothing
 
-weatherStation :: FileMatcher
-weatherStation = makeFileMatcher (RegularFile (return $ B.pack "foo")) "^/us/[A-Z]{4}$"
+makeWeather :: [FilePart] -> IO ByteString
+makeWeather (_:_:station:[]) = return $ B.pack (station ++ "\n")
+makeWeather _ = return $ B.pack "Not found\n"
 
-zipCode :: FileMatcher
-zipCode = makeFileMatcher (RegularFile (return $ B.pack "foo")) "^/us/[0-9]{5}$"
+weatherStation :: FileMatcher
+weatherStation = makeFileMatcher (RegularFile makeWeather) "^/us/[A-Z]{4}$"
 
 countryUS :: FileMatcher
 countryUS = makeFileMatcher DirectoryFile "^/us/?$"
@@ -49,7 +50,7 @@ fsRoot :: FileMatcher
 fsRoot = makeFileMatcher DirectoryFile "^/$"
 
 fileSpecifications :: [FileMatcher]
-fileSpecifications = [fsRoot, zipCode, countryUS, weatherStation]
+fileSpecifications = [fsRoot, countryUS, weatherStation]
 
 matchSpec :: FilePath -> [([FilePath], File)]
 matchSpec path =

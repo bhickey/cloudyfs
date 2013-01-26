@@ -94,7 +94,7 @@ cloudyGetFileStat stateRef p = do
     Nothing ->
       case mapMaybe (\ x -> x p) fileSpecifications of
         (_, RegularFile action):[] -> do
-          result <- action
+          result <- action path
           case mkfile state path result of
             Just f -> do
               writeIORef stateRef f
