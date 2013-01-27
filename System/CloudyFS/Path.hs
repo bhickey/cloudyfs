@@ -1,5 +1,7 @@
 module System.CloudyFS.Path where
 
+import System.CloudyFS.Weather
+
 import Data.Maybe
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as B
@@ -37,8 +39,7 @@ makeFileMatcher f r fp =
     _ -> Nothing
 
 makeWeather :: [FilePart] -> IO ByteString
-makeWeather (_:_:station:[]) = return $ B.pack (station ++ "\n")
-makeWeather _ = return $ B.pack "Not found\n"
+makeWeather = getWeatherFor
 
 weatherStation :: FileMatcher
 weatherStation = makeFileMatcher (RegularFile makeWeather) "^/us/[A-Z]{4}$"
