@@ -1,1 +1,18 @@
-Hello World
+CloudyFS
+--------
+A cloud in your filesystem!
+
+Instructions
+------------
+cabal build
+./cloudyfs <mount point>
+
+Supported Weather Services
+--------------------------
+National Weather Service
+/us/[A-Z]{4}
+
+TODO
+----
+yr.no
+
