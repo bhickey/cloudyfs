@@ -16,11 +16,10 @@ import qualified System.Fuse as Fuse
 
 import System.CloudyFS.Path
 import System.CloudyFS.FileSystem
+import System.CloudyFS.Weather
 
+type FileType = Weather
 type HT = FileType
-
-type FileType = B.ByteString
-
 type State = IORef (FileSystem FileType)
 
 mkFileSystem :: IO State
@@ -62,8 +61,8 @@ dirStat ctx = FileStat
   , statStatusChangeTime = 0
   }
 
-fileStat :: Int -> FuseContext -> FileStat
-fileStat sz ctx = FileStat 
+fileStat :: Weather -> FuseContext -> FileStat
+fileStat w ctx = FileStat 
   { statEntryType = Fuse.RegularFile
   , statFileMode = foldr1 unionFileModes
                      [ ownerReadMode
@@ -74,16 +73,16 @@ fileStat sz ctx = FileStat
   , statFileOwner = fuseCtxUserID ctx
   , statFileGroup = fuseCtxGroupID ctx
   , statSpecialDeviceID = 0
-  , statFileSize = fromIntegral (sz + 1)
+  , statFileSize = fromIntegral $ B.length $ asByteString w
   , statBlocks = 1
   , statAccessTime = 0
-  , statModificationTime = 0
+  , statModificationTime = time w 
   , statStatusChangeTime = 0
   }
 
-stat :: FuseContext -> FileSystem B.ByteString -> FileStat
+stat :: FuseContext -> FileSystem FileType -> FileStat
 stat c (SystemDirectory _) = dirStat c
-stat c (SystemFile b) = fileStat (B.length b) c
+stat c (SystemFile w) = fileStat w c
 
 cloudyGetFileStat :: State -> FilePath -> IO (Either Errno FileStat)
 cloudyGetFileStat stateRef p = do
@@ -150,8 +149,9 @@ cloudyOpen stateRef path ReadOnly flags = do
    case getFile state (normalisePath path) of
      Nothing ->
        case mapMaybe (\ x -> x path) fileSpecifications of
-         (fp, RegularFile _):[]  -> do
-           case mkfile state fp (B.pack path) of
+         (fp, RegularFile act):[]  -> do
+           weather <- act fp
+           case mkfile state fp weather of
              Nothing -> return $ Left eACCES
              Just f -> do
                writeIORef stateRef f
@@ -163,7 +163,7 @@ cloudyOpen _ _ _ _ = return $ Left eACCES
 
 cloudyRead :: FilePath -> HT -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
 cloudyRead path ht byteCount offset =
-  return $ Right $ B.take (fromIntegral byteCount) $ B.drop (fromIntegral offset) ht
+  return $ Right $ B.take (fromIntegral byteCount) $ B.drop (fromIntegral offset) $ asByteString ht
 
 cloudyGetFileSystemStats :: String -> IO (Either Errno FileSystemStats)
 cloudyGetFileSystemStats _ =

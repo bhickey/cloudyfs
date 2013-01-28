@@ -3,8 +3,6 @@ module System.CloudyFS.Path where
 import System.CloudyFS.Weather
 
 import Data.Maybe
-import Data.ByteString.Char8 (ByteString)
-import qualified Data.ByteString.Char8 as B
 import System.FilePath.Posix
 import Text.Regex.Base (defaultCompOpt, defaultExecOpt)
 import Text.Regex.Base.RegexLike (matchOnce)
@@ -17,7 +15,7 @@ data File =
     RegularFile FileAction
   | DirectoryFile
 
-type FileAction = [FilePart] -> IO ByteString
+type FileAction = [FilePart] -> IO Weather
 type FileMatcher = FilePath -> Maybe ([FilePath], File)
 
 makeRegex :: String -> Regex
@@ -38,8 +36,8 @@ makeFileMatcher f r fp =
     Just _ -> Just (normalisePath fp, f)
     _ -> Nothing
 
-makeWeather :: [FilePart] -> IO ByteString
-makeWeather = getWeatherFor
+makeWeather :: [FilePart] -> IO Weather
+makeWeather fp = fetchWeather (fp !! 2)
 
 weatherStation :: FileMatcher
 weatherStation = makeFileMatcher (RegularFile makeWeather) "^/us/[A-Z]{4}$"

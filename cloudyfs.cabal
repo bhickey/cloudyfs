@@ -13,7 +13,7 @@ build-type:           Simple
 Executable cloudyfs {
   main-is:            cloudyfs.hs
   build-depends:      base >= 4 && < 5, unix, bytestring, containers, HFuse,
-                      datetime, filepath, regex-tdfa, regex-base, tagsoup,
-                      HTTP, timerep
+                      filepath, regex-tdfa, regex-base, tagsoup,
+                      HTTP, timerep, time, convertible
   ghc-options:        -Wall
 }
