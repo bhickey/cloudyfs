@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="ISO-8859-1"?> 
+<?xml-stylesheet href="latest_ob.xsl" type="text/xsl"?>
+<current_observation version="1.0"
+	 xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+	 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	 xsi:noNamespaceSchemaLocation="http://www.weather.gov/view/current_observation.xsd">
+	<credit>NOAA's National Weather Service</credit>
+	<credit_URL>http://weather.gov/</credit_URL>
+	<image>
+		<url>http://weather.gov/images/xml_logo.gif</url>
+		<title>NOAA's National Weather Service</title>
+		<link>http://weather.gov</link>
+	</image>
+	<suggested_pickup>15 minutes after the hour</suggested_pickup>
+	<suggested_pickup_period>60</suggested_pickup_period>
+	<location>Providence, Green State Airport, RI</location>
+	<station_id>KPVD</station_id>
+	<latitude>41.73</latitude>
+	<longitude>-71.43</longitude>
+	<observation_time>Last Updated on Jan 26 2013, 7:51 pm EST</observation_time>
+        <observation_time_rfc822>Sat, 26 Jan 2013 19:51:00 -0500</observation_time_rfc822>
+	<weather>Mostly Cloudy</weather>
+	<temperature_string>19.0 F (-7.2 C)</temperature_string>
+	<temp_f>19.0</temp_f>
+	<temp_c>-7.2</temp_c>
+	<relative_humidity>34</relative_humidity>
+	<wind_string>from the Northwest at 15.0 gusting to 27.6 MPH (13 gusting to 24 KT)</wind_string>
+	<wind_dir>Northwest</wind_dir>
+	<wind_degrees>320</wind_degrees>
+	<wind_mph>15.0</wind_mph>
+	<wind_gust_mph>27.6</wind_gust_mph>
+	<wind_kt>13</wind_kt>
+	<wind_gust_kt>24</wind_gust_kt>
+	<pressure_string>1022.4 mb</pressure_string>
+	<pressure_mb>1022.4</pressure_mb>
+	<pressure_in>30.19</pressure_in>
+	<dewpoint_string>-5.1 F (-20.6 C)</dewpoint_string>
+	<dewpoint_f>-5.1</dewpoint_f>
+	<dewpoint_c>-20.6</dewpoint_c>
+	<windchill_string>5 F (-15 C)</windchill_string>
+      	<windchill_f>5</windchill_f>
+      	<windchill_c>-15</windchill_c>
+	<visibility_mi>10.00</visibility_mi>
+ 	<icon_url_base>http://forecast.weather.gov/images/wtf/small/</icon_url_base>
+	<two_day_history_url>http://www.weather.gov/data/obhistory/KPVD.html</two_day_history_url>
+	<icon_url_name>nbkn.png</icon_url_name>
+	<ob_url>http://www.weather.gov/data/METAR/KPVD.1.txt</ob_url>
+	<disclaimer_url>http://weather.gov/disclaimer.html</disclaimer_url>
+	<copyright_url>http://weather.gov/disclaimer.html</copyright_url>
+	<privacy_policy_url>http://weather.gov/notice.html</privacy_policy_url>
+</current_observation>
