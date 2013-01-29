@@ -94,11 +94,14 @@ cloudyGetFileStat stateRef p = do
       case mapMaybe (\ x -> x p) fileSpecifications of
         (_, RegularFile action):[] -> do
           result <- action path
-          case mkfile state path result of
-            Just f -> do
-              writeIORef stateRef f
-              cloudyGetFileStat stateRef p
+          case result of
             Nothing -> return err
+            Just r ->
+              case mkfile state path r of
+                Just f -> do
+                  writeIORef stateRef f
+                  cloudyGetFileStat stateRef p
+                Nothing -> return err
         (_, DirectoryFile):[] -> do
           case mkdir state path of
             Just f -> do
@@ -107,7 +110,7 @@ cloudyGetFileStat stateRef p = do
             Nothing -> return err
         _ -> return err
    where path = normalisePath p
-         err = Left eEXIST
+         err = Left eNFILE
 
 getDirContents ::
   FileSystem FileType ->
@@ -151,18 +154,21 @@ cloudyOpen stateRef path ReadOnly flags = do
        case mapMaybe (\ x -> x path) fileSpecifications of
          (fp, RegularFile act):[]  -> do
            weather <- act fp
-           case mkfile state fp weather of
-             Nothing -> return $ Left eACCES
-             Just f -> do
-               writeIORef stateRef f
-               cloudyOpen stateRef path ReadOnly flags
-         _ -> return $ Left eEXIST
+           case weather of
+             Nothing -> return $ Left eNFILE
+             Just r -> 
+               case mkfile state fp r of
+                 Nothing -> return $ Left eACCES
+                 Just f -> do
+                   writeIORef stateRef f
+                   cloudyOpen stateRef path ReadOnly flags
+         _ -> return $ Left eNFILE
      Just (SystemFile a) -> return $ Right a
-     _ -> return $ Left eEXIST
+     _ -> return $ Left eNFILE
 cloudyOpen _ _ _ _ = return $ Left eACCES
 
 cloudyRead :: FilePath -> HT -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
-cloudyRead path ht byteCount offset =
+cloudyRead _ ht byteCount offset =
   return $ Right $ B.take (fromIntegral byteCount) $ B.drop (fromIntegral offset) $ asByteString ht
 
 cloudyGetFileSystemStats :: String -> IO (Either Errno FileSystemStats)

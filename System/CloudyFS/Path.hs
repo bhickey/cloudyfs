@@ -15,7 +15,7 @@ data File =
     RegularFile FileAction
   | DirectoryFile
 
-type FileAction = [FilePart] -> IO Weather
+type FileAction = [FilePart] -> IO (Maybe Weather)
 type FileMatcher = FilePath -> Maybe ([FilePath], File)
 
 makeRegex :: String -> Regex
@@ -36,7 +36,7 @@ makeFileMatcher f r fp =
     Just _ -> Just (normalisePath fp, f)
     _ -> Nothing
 
-makeWeather :: [FilePart] -> IO Weather
+makeWeather :: [FilePart] -> IO (Maybe Weather)
 makeWeather fp = fetchWeather (fp !! 2)
 
 weatherStation :: FileMatcher
