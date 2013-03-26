@@ -1,6 +1,6 @@
 name:                 cloudyfs
 version:              0.0.1
-license:              AllRightsReserved
+license:              OtherLicense
 author:               Brendan Hickey <brendan@bhickey.net>, Nicholas Sinnott-Armstrong <>
 maintainer:           Brendan Hickey <brendan@bhickey.net>, Nicholas Sinnott-Armstrong <>
 synopsis:             A cloud in the file system.
