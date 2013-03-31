@@ -121,7 +121,7 @@ getDirContents fs path ctx =
   case lsdir fs path of
     Nothing -> []
     Just m -> M.foldWithKey accumulator [] m
-  where accumulator k fs l = (k, stat ctx fs):l 
+  where accumulator k f l = (k, stat ctx f):l 
 
 cloudyOpenDirectory :: State -> FilePath -> IO Errno
 cloudyOpenDirectory stateRef path = do
@@ -153,8 +153,8 @@ cloudyOpen stateRef path ReadOnly flags = do
      Nothing ->
        case mapMaybe (\ x -> x path) fileSpecifications of
          (fp, RegularFile act):[]  -> do
-           weather <- act fp
-           case weather of
+           w <- act fp
+           case w of
              Nothing -> return $ Left eNFILE
              Just r -> 
                case mkfile state fp r of

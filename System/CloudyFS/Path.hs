@@ -36,11 +36,11 @@ makeFileMatcher f r fp =
     Just _ -> Just (normalisePath fp, f)
     _ -> Nothing
 
-makeWeather :: [FilePart] -> IO (Maybe Weather)
-makeWeather fp = fetchWeather (fp !! 2)
+weather :: [FilePart] -> IO (Maybe Weather)
+weather fp = fetchWeather (fp !! 2)
 
 weatherStation :: FileMatcher
-weatherStation = makeFileMatcher (RegularFile makeWeather) "^/us/[A-Z]{4}$"
+weatherStation = makeFileMatcher (RegularFile weather) "^/us/[A-Z]{4}$"
 
 countryUS :: FileMatcher
 countryUS = makeFileMatcher DirectoryFile "^/us/?$"

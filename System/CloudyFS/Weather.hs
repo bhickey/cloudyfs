@@ -5,7 +5,6 @@ import Data.Convertible (convert)
 import Data.Maybe (fromJust)
 
 import Data.ByteString.Char8 hiding (length)
-import Data.Time.Clock
 import Data.Time.LocalTime
 
 import System.Posix.Types
@@ -29,12 +28,17 @@ getURL x = getResponseBody =<< simpleHTTP (getRequest x)
 fetchWeather :: String -> IO (Maybe Weather)
 fetchWeather station = do
     tags <- fmap parseTags $ getURL url
-    if tagsOK tags
-      then return $ Just $ Weather (getDate tags) (getConditions tags) (getTemperature tags)
-      else return Nothing
+    return $ makeWeather tags
+  where 
+    url = "http://w1.weather.gov/xml/current_obs/" ++ station ++ ".xml"
+
+makeWeather :: [Tag String] -> Maybe Weather
+makeWeather tags =
+  if tagsOK tags
+    then Just $ Weather (getDate tags) (getConditions tags) (getTemperature tags)
+    else Nothing
   where
     tagsOK tags = length (sections (~== "<weather>") tags) > 0
-    url = "http://w1.weather.gov/xml/current_obs/" ++ station ++ ".xml"
     getText tag blob = fromTagText $ sections (~== tag) blob !! 0 !! 1
     getDate t = convert $ zonedTimeToUTC $ fromJust $ RFC2822.readRFC2822 (getText "<observation_time_rfc822>" t)
     getConditions = (getText "<weather>")
