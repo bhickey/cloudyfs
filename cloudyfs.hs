@@ -1,8 +1,6 @@
 module Main where
 
 import Data.DateTime (DateTime, getCurrentTime)
-import Data.Time.LocalTime
-import Data.Convertible (convert)
 
 import Data.Maybe
 import Data.IORef
