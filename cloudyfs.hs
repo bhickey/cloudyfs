@@ -1,5 +1,9 @@
 module Main where
 
+import Data.DateTime (DateTime, getCurrentTime)
+import Data.Time.LocalTime
+import Data.Convertible (convert)
+
 import Data.Maybe
 import Data.IORef
 
@@ -14,8 +18,9 @@ import System.Posix.IO
 import System.Fuse hiding (RegularFile, Directory)
 import qualified System.Fuse as Fuse
 
-import System.CloudyFS.Path
+import System.CloudyFS.Expiring
 import System.CloudyFS.FileSystem
+import System.CloudyFS.Path
 import System.CloudyFS.Weather
 
 type FileType = Weather
@@ -76,7 +81,7 @@ fileStat w ctx = FileStat
   , statFileSize = fromIntegral $ B.length $ asByteString w
   , statBlocks = 1
   , statAccessTime = 0
-  , statModificationTime = time w 
+  , statModificationTime = epochTime w 
   , statStatusChangeTime = 0
   }
 
@@ -86,9 +91,10 @@ stat c (SystemFile w) = fileStat w c
 
 cloudyGetFileStat :: State -> FilePath -> IO (Either Errno FileStat)
 cloudyGetFileStat stateRef p = do
+  t <- getCurrentTime
   ctx <- getFuseContext
   state <- readIORef stateRef
-  case getFile state path of
+  case getFile t state path of
     Just fs -> return $ Right $ stat ctx fs
     Nothing ->
       case mapMaybe (\ x -> x p) fileSpecifications of
@@ -113,15 +119,20 @@ cloudyGetFileStat stateRef p = do
          err = Left eNFILE
 
 getDirContents ::
+  DateTime ->
   FileSystem FileType ->
   [FilePart] ->
   FuseContext ->
   [(FilePath, FileStat)]
-getDirContents fs path ctx =
+getDirContents t fs path ctx =
   case lsdir fs path of
     Nothing -> []
     Just m -> M.foldWithKey accumulator [] m
-  where accumulator k f l = (k, stat ctx f):l 
+  where
+    accumulator k f l =
+      if isValid t f
+        then (k, stat ctx f):l 
+        else l
 
 cloudyOpenDirectory :: State -> FilePath -> IO Errno
 cloudyOpenDirectory stateRef path = do
@@ -137,34 +148,42 @@ cloudyOpenDirectory stateRef path = do
  
 cloudyReadDirectory :: State -> FilePath -> IO (Either Errno [(FilePath, FileStat)])
 cloudyReadDirectory stateRef path = do
+    t <- getCurrentTime
     ctx <- getFuseContext
     case mapMaybe (\ x -> x path) fileSpecifications of
       (fp, DirectoryFile):_ -> do
         state <- readIORef stateRef
         return $ Right $ [(".", dirStat ctx)
                         ,("..", dirStat ctx)
-                        ] ++ (getDirContents state fp ctx)
+                        ] ++ (getDirContents t state fp ctx)
       _ -> return $ Left eEXIST
 
 cloudyOpen :: State -> FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno HT)
 cloudyOpen stateRef path ReadOnly flags = do
+   t <- getCurrentTime
    state <- readIORef stateRef
-   case getFile state (normalisePath path) of
-     Nothing ->
-       case mapMaybe (\ x -> x path) fileSpecifications of
-         (fp, RegularFile act):[]  -> do
-           w <- act fp
-           case w of
-             Nothing -> return $ Left eNFILE
-             Just r -> 
-               case mkfile state fp r of
-                 Nothing -> return $ Left eACCES
-                 Just f -> do
-                   writeIORef stateRef f
-                   cloudyOpen stateRef path ReadOnly flags
-         _ -> return $ Left eNFILE
-     Just (SystemFile a) -> return $ Right a
+   case getFile t state (normalisePath path) of
+     Nothing -> fetchAndPut state
+     Just (SystemFile a) -> 
+       if isValid t a
+         then return $ Right a
+         else fetchAndPut state
      _ -> return $ Left eNFILE
+  where
+    fetchAndPut state =
+      case mapMaybe (\ x -> x path) fileSpecifications of
+        (fp, RegularFile act):[]  -> do
+          w <- act fp
+          case w of
+            Nothing -> return $ Left eNFILE
+            Just r -> 
+              case mkfile state fp r of
+                Nothing -> return $ Left eACCES
+                Just f -> do
+                  writeIORef stateRef f
+                  cloudyOpen stateRef path ReadOnly flags
+        _ -> return $ Left eNFILE
+
 cloudyOpen _ _ _ _ = return $ Left eACCES
 
 cloudyRead :: FilePath -> HT -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)

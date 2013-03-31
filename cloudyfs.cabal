@@ -1,6 +1,7 @@
 name:                 cloudyfs
 version:              0.0.1
 license:              OtherLicense
+license-file:         LICENSE
 author:               Brendan Hickey <brendan@bhickey.net>
 maintainer:           Brendan Hickey <brendan@bhickey.net>
 synopsis:             A cloud in the file system.
@@ -14,6 +15,6 @@ Executable cloudyfs {
   main-is:            cloudyfs.hs
   build-depends:      base >= 4 && < 5, unix, bytestring, containers, HFuse,
                       filepath, regex-tdfa, regex-base, tagsoup,
-                      HTTP, timerep, time, convertible
-  ghc-options:        -Wall
+                      HTTP, timerep, convertible, datetime
+  ghc-options:        -Wall -package time-1.4
 }

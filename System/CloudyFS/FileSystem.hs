@@ -1,12 +1,21 @@
 module System.CloudyFS.FileSystem where
 
 import qualified Data.Map as M
+
+import Data.DateTime (DateTime, fromSeconds)
+
+import System.CloudyFS.Expiring
 import System.CloudyFS.Path
 
 data FileSystem a =
     SystemFile a
   | SystemDirectory (M.Map FilePart (FileSystem a))
   deriving (Show)
+
+instance (Expiring a) => Expiring (FileSystem a) where
+  expiresAt (SystemFile f) = expiresAt f
+  expiresAt (SystemDirectory m) =
+    maximum $ (fromSeconds 0):(map expiresAt (M.elems m))
 
 type FileName = FilePart
 type DirName = FilePart
@@ -34,13 +43,15 @@ lsdir (SystemDirectory contents) (h:t) =
     Just dir -> lsdir dir t
 lsdir (SystemDirectory contents) [] = Just contents
 
-getFile :: FileSystem a -> [FilePart] -> Maybe (FileSystem a)
-getFile f [] = Just f
-getFile (SystemFile _) _ = Nothing
-getFile (SystemDirectory contents) (h:t) =
-  case M.lookup h contents of
-    Nothing -> Nothing
-    Just d -> getFile d t
+getFile :: (Expiring a) => DateTime -> FileSystem a -> [FilePart] -> Maybe (FileSystem a)
+getFile tm f [] = if isValid tm f then Just f else Nothing
+getFile _ (SystemFile _) _ = Nothing
+getFile tm dir@(SystemDirectory contents) (h:t) =
+  if isValid tm dir
+    then case M.lookup h contents of
+           Nothing -> Nothing
+           Just d -> getFile tm d t
+    else Nothing
 
 mkfile :: FileSystem a -> [FilePart] -> a -> Maybe (FileSystem a)
 mkfile (SystemFile _) _ _ = Nothing
