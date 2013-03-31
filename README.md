@@ -23,3 +23,7 @@ National Weather Service
 Support Your Local Hacker
 -------------------------
 Consider making a donation to your local Free Software Foundation or Electronic Frontier Foundation!!
+
+Thanks
+------
+Thanks goes out to Eric Dobson, Eric Stansifer, and Nicholas Sinnott-Armstrong.
